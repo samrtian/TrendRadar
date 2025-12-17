@@ -6,9 +6,13 @@ TrendRadar MCP Server - FastMCP 2.0 实现
 """
 
 import json
+import time
 from typing import List, Optional, Dict
+from datetime import datetime
+import schedule
 
 from fastmcp import FastMCP
+from trendradar.__main__ import NewsAnalyzer
 
 from .tools.data_query import DataQueryTools
 from .tools.analytics import AnalyticsTools
@@ -25,6 +29,124 @@ mcp = FastMCP('trendradar-news')
 
 # 全局工具实例（在第一次请求时初始化）
 _tools_instances = {}
+
+# 全局定时任务标志
+_scheduler_running = False
+
+# 全局 NewsAnalyzer 实例
+_analyzer = None
+
+
+# === 定时任务功能 ===
+def is_in_time_window(start_time: str, end_time: str) -> bool:
+    """
+    检查当前时间是否在指定的时间窗口内
+    
+    Args:
+        start_time: 开始时间，格式 "HH:MM"
+        end_time: 结束时间，格式 "HH:MM"
+        
+    Returns:
+        bool: 当前时间是否在时间窗口内
+    """
+    now = datetime.now()
+    current_time = now.strftime("%H:%M")
+    return start_time <= current_time <= end_time
+
+
+def run_analysis():
+    """
+    执行新闻分析流程
+    """
+    global _analyzer
+    try:
+        if not _analyzer:
+            _analyzer = NewsAnalyzer()
+        
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 开始执行定时新闻分析")
+        _analyzer.run()
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 定时新闻分析完成")
+    except Exception as e:
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 定时新闻分析出错: {e}")
+
+
+
+def scheduled_task():
+    """
+    定时任务函数，检查时间窗口并执行分析
+    """
+    # 加载配置
+    from .tools.config_mgmt import ConfigManagementTools
+    config_tool = ConfigManagementTools()
+    config_result = config_tool.get_current_config(section="all")
+    
+    # 解析配置结果
+    config = config_result.get("config", {})
+    
+    # 检查推送窗口配置
+    push_config = config.get("push", {})
+    push_window = push_config.get("push_window", {})
+    enabled = push_window.get("enabled", False)
+    
+    if enabled:
+        time_range = push_window.get("time_range", {})
+        start = time_range.get("start", "00:00")
+        end = time_range.get("end", "23:59")
+        
+        # 检查当前时间是否在时间窗口内
+        if is_in_time_window(start, end):
+            run_analysis()
+        else:
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 当前时间不在推送窗口 {start}-{end} 内，跳过分析")
+    else:
+        # 没有启用推送窗口，直接执行
+        run_analysis()
+
+
+def start_scheduler():
+    """
+    启动定时任务调度器
+    """
+    global _scheduler_running
+    if _scheduler_running:
+        return
+    
+    # 加载配置
+    from .tools.config_mgmt import ConfigManagementTools
+    config_tool = ConfigManagementTools()
+    config_result = config_tool.get_current_config(section="all")
+    
+    # 解析配置结果
+    config = config_result.get("config", {})
+    
+    # 获取推送窗口配置
+    push_config = config.get("push", {})
+    push_window = push_config.get("push_window", {})
+    interval = push_window.get("interval", 60)  # 默认 60 分钟
+    
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 启动定时任务调度器，执行间隔: {interval} 分钟")
+    
+    # 配置定时任务
+    if interval > 0:
+        schedule.every(interval).minutes.do(scheduled_task)
+    else:
+        # 间隔为 0，只执行一次
+        schedule.once().do(scheduled_task)
+    
+    # 立即执行一次
+    scheduled_task()
+    
+    # 启动调度器线程
+    _scheduler_running = True
+    
+    def run_scheduler():
+        while _scheduler_running:
+            schedule.run_pending()
+            time.sleep(1)
+    
+    import threading
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
 
 
 def _get_tools(project_root: Optional[str] = None):
@@ -850,6 +972,12 @@ def run_server(
     print("    15. get_storage_status      - 获取存储配置和状态")
     print("    16. list_available_dates    - 列出本地/远程可用日期")
     print("=" * 60)
+    print()
+    
+    # 启动定时任务调度器
+    print("  启动定时任务调度器...")
+    start_scheduler()
+    print("  定时任务调度器启动成功")
     print()
 
     # 根据传输模式运行服务器

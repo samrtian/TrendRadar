@@ -15,18 +15,18 @@ storage:
   # - local: 本地 SQLite + TXT/HTML 文件
   # - remote: 远程云存储（S3 兼容协议，支持 R2/OSS/COS 等）
   # - auto: 自动选择（GitHub Actions 环境且配置了远程存储则用 remote，否则用 local）
-  backend: "auto"
+  backend: "local"
 
   # 数据格式选项
   formats:
     sqlite: true       # 主存储（必须启用）
     txt: false         # 是否生成 TXT 快照
-    html: false        # 是否生成 HTML 报告（⚠️ 邮件推送必须设为 true，否则会报错）
+    html: true        # 是否生成 HTML 报告（⚠️ 邮件推送必须设为 true，否则会报错）
 
   # 本地存储配置
   local:
     data_dir: "output"        # 数据目录
-    retention_days: 0         # 本地数据保留天数（0 = 不清理）
+    retention_days: 30         # 本地数据保留天数（0 = 不清理）
 
   # 远程存储配置（S3 兼容协议）
   # 支持: Cloudflare R2, 阿里云 OSS, 腾讯云 COS, AWS S3, MinIO 等
@@ -73,7 +73,7 @@ crawler:
 
 # 推送模式选择
 report:
-  mode: "daily" # 可选: "daily"|"incremental"|"current"
+  mode: "incremental" # 可选: "daily"|"incremental"|"current"
   rank_threshold: 5 # 排名高亮阈值
   sort_by_position_first: false # 排序优先级：true=先按配置位置排序，false=先按热点条数排序
   max_news_per_keyword: 0 # 每个关键词最大显示数量，0=不限制
@@ -96,13 +96,14 @@ notification:
   #   - 只想在工作日白天接收推送（如 09:00-18:00）
   #   - 希望在晚上固定时间收到汇总（如 20:00-22:00）
   push_window:
-    enabled: false  # 是否启用推送时间窗口控制，默认关闭
+    enabled: true  # 是否启用推送时间窗口控制，默认关闭
     # 注意：GitHub Actions 执行时间不稳定，时间范围建议至少留足 2 小时
     # 如果想要精准的定时推送，建议使用 Docker 部署在个人服务器上
     time_range:
-      start: "20:00"  # 推送时间窗口开始（北京时间）
+      start: "09:00"  # 推送时间窗口开始（北京时间）
       end: "22:00"    # 推送时间窗口结束（北京时间）
-    once_per_day: true  # 每天在时间窗口内只推送一次，如果 false，则窗口内每次执行都推送
+    once_per_day: false  # 每天在时间窗口内只推送一次，如果 false，则窗口内每次执行都推送
+    interval: 60  # 在时间范围内，每间隔多少分钟执行一次，0 表示只执行一次
 
   # ⚠️⚠️⚠️ 重要安全警告 / IMPORTANT SECURITY WARNING ⚠️⚠️⚠️
   #
@@ -143,11 +144,11 @@ notification:
     wework_msg_type: "markdown" # 企业微信消息类型：markdown(群机器人) 或 text(个人微信应用)
     telegram_bot_token: "" # Telegram Bot Token（多账号用 ; 分隔，需与 chat_id 数量一致）
     telegram_chat_id: "" # Telegram Chat ID（多账号用 ; 分隔，需与 bot_token 数量一致）
-    email_from: "" # 发件人邮箱地址
-    email_password: "" # 发件人邮箱密码或授权码
-    email_to: "" # 收件人邮箱地址，多个收件人用逗号分隔
-    email_smtp_server: "" # SMTP服务器地址（可选，留空自动识别）
-    email_smtp_port: "" # SMTP端口（可选，留空自动识别）
+    email_from: "samrtian@qq.com" # 发件人邮箱地址
+    email_password: "zhgkzvghpbfnbidi" # 发件人邮箱密码或授权码
+    email_to: "samrtian@qq.com" # 收件人邮箱地址，多个收件人用逗号分隔
+    email_smtp_server: "smtp.qq.com" # SMTP服务器地址（可选，留空自动识别）
+    email_smtp_port: "587" # SMTP端口（可选，留空自动识别）
     ntfy_server_url: "https://ntfy.sh" # ntfy服务器地址，默认使用公共服务，可改为自托管地址
     ntfy_topic: "" # ntfy主题名称（多账号用 ; 分隔）
     ntfy_token: "" # ntfy访问令牌（可选，用于私有主题，多账号用 ; 分隔）

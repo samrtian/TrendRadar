@@ -420,14 +420,20 @@ def count_word_frequency(
         for source_id, title_list in data["titles"].items():
             all_titles.extend(title_list)
 
-        # 按权重排序
+        # 按时间降序（最新在前）+ 权重排序
         sorted_titles = sorted(
             all_titles,
             key=lambda x: (
+                # 先按最后出现时间降序（最新的新闻在前）
+                x["last_time"] if x["last_time"] else "00:00",
+                # 再按权重降序
                 -calculate_news_weight(x, rank_threshold, weight_config),
+                # 再按最小排名升序
                 min(x["ranks"]) if x["ranks"] else 999,
+                # 最后按出现次数降序
                 -x["count"],
             ),
+            reverse=True  # 时间降序，最新的新闻排在前面
         )
 
         # 应用最大显示数量限制（优先级：单独配置 > 全局配置）
